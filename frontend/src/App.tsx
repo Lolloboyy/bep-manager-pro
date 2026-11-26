@@ -6,7 +6,8 @@ import {
   CircleHelp, Database, Download, FileChartColumn, FileSpreadsheet,
   Gauge, History, LayoutDashboard, Lightbulb, Menu, Plus, RefreshCw, Save,
   ShieldCheck, SlidersHorizontal, Sparkles, Target, Trash2, TrendingUp,
-  Wallet, X, Package,
+  Wallet, X, Package, Crown, Rocket, Zap, CircleDollarSign, BadgeCheck,
+  Compass, Gem,
 } from 'lucide-react'
 import {
   CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer,
@@ -27,10 +28,12 @@ type Analysis = {
   isFeasible: boolean; productBreakdown: ProductResult[];
 }
 type SavedScenario = { id: number | string; name: string; createdAt: string; request: AnalysisRequest; result: Analysis }
-type Page = 'overview' | 'simulator' | 'products' | 'history' | 'method'
+type Page = 'overview' | 'simulator' | 'products' | 'pricing' | 'history' | 'method' | 'plans'
+type PlanId = 'starter' | 'pro' | 'studio'
 type ScenarioControls = { price: number; variable: number; fixed: number; volume: number }
 
-const API = 'http://localhost:8080/api'
+const API_ORIGIN = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, '') || (import.meta.env.DEV ? 'http://localhost:8080' : '')
+const API = API_ORIGIN ? `${API_ORIGIN}/api` : ''
 const DRAFT_KEY = 'bep-manager-pro-draft-v1'
 const HISTORY_KEY = 'bep-manager-pro-history-v1'
 const initialRequest: AnalysisRequest = {
@@ -121,6 +124,8 @@ function App() {
   const [controls, setControls] = useState<ScenarioControls>({ price: 0, variable: 0, fixed: 0, volume: 0 })
   const [showCompanyEdit, setShowCompanyEdit] = useState(false)
   const [notice, setNotice] = useState('')
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>(() => (localStorage.getItem('bep-manager-pro-plan-v1') as PlanId | null) || 'pro')
+  const [targetMargin, setTargetMargin] = useState(35)
 
   useEffect(() => {
     try {
@@ -146,7 +151,10 @@ function App() {
     if (draftLoaded) localStorage.setItem(DRAFT_KEY, JSON.stringify({ request, companyName }))
   }, [request, companyName, draftLoaded])
 
+  useEffect(() => { localStorage.setItem('bep-manager-pro-plan-v1', selectedPlan) }, [selectedPlan])
+
   useEffect(() => {
+    if (!API) { setAnalysis(calculate(request)); setBackendStatus('offline'); setServerCalculation(false); return }
     let active = true
     const controller = new AbortController()
     const timeout = window.setTimeout(async () => {
@@ -175,6 +183,7 @@ function App() {
   }, [request])
 
   useEffect(() => {
+    if (!API) { setBackendStatus('offline'); return }
     let active = true
     fetch(`${API}/scenarios`)
       .then((r) => { if (!r.ok) throw new Error('API non disponibile'); return r.json() as Promise<SavedScenario[]> })
@@ -224,6 +233,7 @@ function App() {
     setScenarioName(name)
     const payload = { name, request }
     try {
+      if (!API) throw new Error('API non configurata')
       const response = await fetch(`${API}/scenarios`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       })
@@ -255,7 +265,7 @@ function App() {
 
   const deleteScenario = async (id: number | string) => {
     if (!window.confirm('Vuoi eliminare questa analisi dallo storico?')) return
-    if (typeof id === 'number') {
+    if (API && typeof id === 'number') {
       try { await fetch(`${API}/scenarios/${id}`, { method: 'DELETE' }) } catch { /* fallback locale */ }
     }
     setHistory((current) => {
@@ -298,8 +308,10 @@ function App() {
     { id: 'overview', label: 'Panoramica', icon: LayoutDashboard, caption: 'Indicatori principali' },
     { id: 'simulator', label: 'Laboratorio', icon: SlidersHorizontal, caption: 'Simula le decisioni' },
     { id: 'products', label: 'Prodotti e servizi', icon: Package, caption: 'Margini e mix di vendita' },
-    { id: 'history', label: 'Storico analisi', icon: History, caption: 'Scenari salvati' },
-    { id: 'method', label: 'Metodo e formule', icon: BookOpen, caption: 'Come vengono i calcoli' },
+    { id: 'pricing', label: 'Prezzi intelligenti', icon: CircleDollarSign, caption: 'Prezzi e obiettivi' },
+    { id: 'history', label: 'Scenari e storico', icon: History, caption: 'Confronta e riprendi' },
+    { id: 'method', label: 'Metodo e formule', icon: BookOpen, caption: 'Trasparenza dei calcoli' },
+    { id: 'plans', label: 'Piani e membership', icon: Crown, caption: 'Piani demo' },
   ]
 
   return (
@@ -307,7 +319,7 @@ function App() {
       <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
         <div className="brand-row">
           <div className="brand-mark"><Activity size={22} strokeWidth={2.5} /></div>
-          <div><div className="brand-name">BEP Manager</div><div className="brand-edition">PRO · BUSINESS ANALYTICS</div></div>
+          <div><div className="brand-name">BEP Manager</div><div className="brand-edition">DECISION INTELLIGENCE · PRO</div></div>
           <button className="icon-button mobile-close" onClick={() => setMobileNav(false)} aria-label="Chiudi menu"><X size={18} /></button>
         </div>
         <div className="workspace-label">WORKSPACE</div>
@@ -332,7 +344,7 @@ function App() {
           <p>Usa il Laboratorio per verificare l'effetto economico delle tue ipotesi prima di applicarle.</p>
           <button onClick={() => setPage('simulator')}>Apri simulatore <ArrowRight size={14} /></button>
         </div>
-        <div className="sidebar-footer"><ShieldCheck size={15} /><span>Spazio di lavoro locale protetto</span></div>
+        <div className="sidebar-footer"><ShieldCheck size={15} /><span>Workspace demo · dati salvati nel tuo spazio</span></div>
       </aside>
       {mobileNav && <button className="mobile-scrim" aria-label="Chiudi menu" onClick={() => setMobileNav(false)} />}
 
@@ -343,7 +355,7 @@ function App() {
             <div className="breadcrumb">BEP MANAGER <span>/</span> <strong>{navItems.find((item) => item.id === page)?.label.toUpperCase()}</strong></div>
           </div>
           <div className="topbar-actions">
-            <span className={`connection ${backendStatus}`}><i />{backendStatus === 'online' ? 'Backend connesso' : backendStatus === 'checking' ? 'Connessione…' : 'Modalità locale'}</span>
+            <span className={`connection ${backendStatus}`}><i />{backendStatus === 'online' ? 'Sistema connesso' : backendStatus === 'checking' ? 'Connessione…' : 'Demo locale'}</span>
             <button className="button button-quiet" onClick={exportCsv}><Download size={16} /> <span>CSV</span></button>
             <button className="button button-outline" onClick={() => window.print()}><FileChartColumn size={16} /> <span>Report PDF</span></button>
             <button className="button button-primary" onClick={saveScenario}><Save size={16} /> <span>Salva analisi</span></button>
@@ -355,10 +367,12 @@ function App() {
           {page === 'overview' && <OverviewPage analysis={analysis} request={request} chartData={chartData} serverCalculation={serverCalculation} onPage={setPage} onReset={resetDemo} />}
           {page === 'simulator' && <SimulatorPage controls={controls} setControls={setControls} base={analysis} scenario={scenarioAnalysis} request={request} />}
           {page === 'products' && <ProductsPage request={request} analysis={analysis} updateRequest={updateRequest} updateProduct={updateProduct} addProduct={addProduct} removeProduct={removeProduct} />}
+          {page === 'pricing' && <PricingPage request={request} analysis={analysis} targetMargin={targetMargin} setTargetMargin={setTargetMargin} onProducts={() => setPage('products')} />}
+          {page === 'plans' && <PlansPage selectedPlan={selectedPlan} onSelect={(plan) => { setSelectedPlan(plan); showNotice(`Piano ${plan === 'starter' ? 'Starter' : plan === 'pro' ? 'Pro' : 'Studio'} attivato in modalità demo.`) }} />}
           {page === 'history' && <HistoryPage history={history} loadScenario={loadScenario} deleteScenario={deleteScenario} />}
           {page === 'method' && <MethodPage analysis={analysis} request={request} />}
         </div>
-        <footer className="app-footer"><span>BEPMANAGER PRO <b>·</b> VERSIONE DIMOSTRATIVA 1.0</span><span>Analisi gestionale · I risultati dipendono dalle ipotesi inserite</span></footer>
+        <footer className="app-footer"><span>BEPMANAGER PRO <b>·</b> DECISION INTELLIGENCE 2.0</span><span>Analisi gestionale · Le simulazioni non sono previsioni garantite</span></footer>
       </main>
 
       {showCompanyEdit && <div className="modal-backdrop" onClick={() => setShowCompanyEdit(false)}><div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -385,6 +399,7 @@ function OverviewPage({ analysis, request, chartData, serverCalculation, onPage,
   const progress = analysis.bepUnitsExact && analysis.totalPlannedUnits > 0 ? Math.min(100, analysis.totalPlannedUnits / analysis.bepUnitsExact * 100) : 0
   return <>
     <PageHeading eyebrow="CONTROLLO DI GESTIONE · PANORAMICA" title="La tua azienda, in equilibrio." description="Una lettura immediata di redditività, punto di pareggio e margine di sicurezza." right={<><button className="button button-outline" onClick={onReset}><RefreshCw size={15} /> Ripristina demo</button><button className="button button-primary" onClick={() => onPage('simulator')}><SlidersHorizontal size={16} /> Simula una decisione</button></>} />
+    <section className="command-hero"><div className="command-hero-main"><div className="hero-kicker"><Sparkles size={14}/> BUSINESS PULSE · LIVE INSIGHTS</div><h2>Non limitarti a calcolare.<br/><em>Decidi cosa fare dopo.</em></h2><p>Il quadro economico è aggiornato sulle tue ipotesi: esplora margini, prezzi e scenari prima di muovere la prossima scelta.</p><div className="hero-actions"><button className="button button-dark" onClick={() => onPage('simulator')}><Zap size={15}/> Stress test</button><button className="hero-link" onClick={() => onPage('pricing')}>Ottimizza i prezzi <ArrowRight size={15}/></button></div></div><div className="hero-orbit"><div className="orbit-ring ring-one"/><div className="orbit-ring ring-two"/><div className="orbit-core"><span>UTILE / PERDITA</span><strong>{money(analysis.profit)}</strong><small>{analysis.profit >= 0 ? 'risultato positivo' : 'sotto il pareggio'}</small></div><div className="orbit-chip chip-top"><TrendingUp size={14}/> {pct(analysis.contributionMarginRatio * 100)} margine</div><div className="orbit-chip chip-bottom"><Target size={14}/> BEP {analysis.bepUnitsRounded === null ? '—' : integer.format(analysis.bepUnitsRounded)}</div></div><div className="hero-index"><span>01</span><span>CONTROL ROOM</span></div></section>
     <div className="context-strip"><div className="context-dot"><Activity size={15} /></div><div><strong>Analisi attiva</strong><span>{request.products.length} prodotti/servizi · {integer.format(analysis.totalPlannedUnits)} unità previste · costi fissi {money(analysis.fixedCosts)}</span></div><div className="context-right"><span className={`status-chip ${analysis.profit >= 0 && analysis.isFeasible ? 'positive' : 'warning'}`}><i />{status}</span><span className="live-caption">{serverCalculation ? 'Aggiornamento…' : 'Dati aggiornati'}</span></div></div>
 
     <div className="metric-grid">
@@ -404,9 +419,9 @@ function OverviewPage({ analysis, request, chartData, serverCalculation, onPage,
           <YAxis tick={{ fontSize: 11, fill: '#8491a4' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${Math.round(v / 1000)}k`} width={42} />
           <Tooltip formatter={(v) => money(Number(v), true)} labelFormatter={(v) => `${integer.format(Number(v))} unità equivalenti`} contentStyle={{ border: '1px solid #e6ebf2', borderRadius: 12, boxShadow: '0 8px 30px #15243a12', fontSize: 12 }} />
           <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ display: 'none' }} />
-          <Line type="monotone" dataKey="revenue" name="Ricavi" stroke="#168b83" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-          <Line type="monotone" dataKey="costs" name="Costi totali" stroke="#536b91" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
-          <Line type="monotone" dataKey="fixed" name="Costi fissi" stroke="#d4a247" strokeWidth={1.8} strokeDasharray="5 5" dot={false} />
+          <Line type="monotone" dataKey="revenue" name="Ricavi" stroke="#d9ad28" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
+          <Line type="monotone" dataKey="costs" name="Costi totali" stroke="#4e5744" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
+          <Line type="monotone" dataKey="fixed" name="Costi fissi" stroke="#b3aa8d" strokeWidth={1.8} strokeDasharray="5 5" dot={false} />
           {analysis.bepUnitsExact !== null && <ReferenceLine x={analysis.bepUnitsExact} stroke="#8a6bd6" strokeDasharray="4 4" label={{ value: 'BEP', fill: '#8065c2', fontSize: 11, position: 'insideTopRight' }} />}
         </LineChart></ResponsiveContainer></div>
         <div className="chart-foot"><span>Le linee si basano sul mix di vendita previsto e su prezzi/costi medi ponderati.</span><button className="text-button" onClick={() => onPage('method')}>Come leggere il grafico <ArrowRight size={14} /></button></div>
@@ -467,6 +482,7 @@ function SimulatorPage({ controls, setControls, base, scenario, request }: { con
     <div className="sim-intro"><div className="sim-intro-icon"><SlidersHorizontal size={21} /></div><div><strong>Laboratorio delle decisioni</strong><p>Questa simulazione applica variazioni percentuali ai dati correnti. Puoi combinare più leve contemporaneamente e confrontare il risultato con lo scenario di partenza.</p></div></div>
     <div className="sim-grid">
       <section className="panel sim-controls"><div className="panel-heading"><div><div className="eyebrow">LEVE DI SIMULAZIONE</div><h2>Modifica le variabili</h2></div><button className="text-button" onClick={() => setControls({ price: 0, variable: 0, fixed: 0, volume: 0 })}><RefreshCw size={14} /> Azzera</button></div>
+        <div className="quick-presets"><span>PARTI DA UN'IPOTESI</span><div><button onClick={() => setControls({price:5,variable:0,fixed:0,volume:0})}>Prezzi +5%</button><button onClick={() => setControls({price:0,variable:10,fixed:0,volume:-10})}>Costi +10% · Volumi −10%</button><button onClick={() => setControls({price:0,variable:-5,fixed:-5,volume:12})}>Scenario crescita</button></div></div>
         {fields.map((field) => <div className="slider-field" key={field.key}><div className="slider-heading"><div><strong>{field.label}</strong><small>{field.hint}</small></div><div className={`slider-value ${controls[field.key] > 0 ? 'value-up' : controls[field.key] < 0 ? 'value-down' : ''}`}>{controls[field.key] > 0 ? '+' : ''}{controls[field.key]}%</div></div><input type="range" min={field.min} max={field.max} step={field.step} value={controls[field.key]} onChange={(e) => setControls({ ...controls, [field.key]: Number(e.target.value) })} /><div className="slider-limits"><span>{field.min}%</span><span>0%</span><span>+{field.max}%</span></div></div>)}
         <div className="sim-caveat"><CircleHelp size={16} /><span>Il modello mantiene costante il mix di vendita. Per ipotesi diverse per singolo prodotto, modifica i dati nella sezione Prodotti e servizi.</span></div>
       </section>
@@ -495,11 +511,56 @@ function ProductsPage({ request, analysis, updateRequest, updateProduct, addProd
   </>
 }
 
-function HistoryPage({ history, loadScenario, deleteScenario }: { history: SavedScenario[]; loadScenario: (item: SavedScenario) => void; deleteScenario: (id: number | string) => void }) {
+function PricingPage({ request, analysis, targetMargin, setTargetMargin, onProducts }: { request: AnalysisRequest; analysis: Analysis; targetMargin: number; setTargetMargin: (value: number) => void; onProducts: () => void }) {
+  const rate = Math.min(0.85, Math.max(0.05, targetMargin / 100))
+  const targetAveragePrice = analysis.totalPlannedUnits > 0 ? (analysis.totalVariableCosts + request.fixedCosts + request.targetProfit) / analysis.totalPlannedUnits : null
+  const suggestions = request.products.map((product) => {
+    const suggested = product.variableCost / (1 - rate)
+    const currentMargin = product.price > 0 ? (product.price - product.variableCost) / product.price * 100 : 0
+    return { ...product, suggested, currentMargin, delta: suggested - product.price }
+  })
   return <>
-    <PageHeading eyebrow="TRACCIABILITÀ · CONFRONTO" title="Storico delle analisi." description="Conserva le ipotesi, confronta le simulazioni e riprendi un'analisi precedente." right={<span className="mini-tag"><Database size={14} /> {history.length} analisi salvate</span>} />
-    {history.length === 0 ? <div className="panel empty-history"><div className="empty-icon"><History size={25} /></div><h2>Lo storico è ancora vuoto</h2><p>Salva un'analisi dalla barra superiore per conservarla e poterla riaprire in seguito.</p></div> : <div className="history-list">{history.map((item) => <div className="panel history-card" key={item.id}><div className="history-icon"><FileChartColumn size={19} /></div><div className="history-main"><strong>{item.name}</strong><span>{new Date(item.createdAt).toLocaleString('it-IT')} · {item.request.products.length} prodotti/servizi · costi fissi {money(item.request.fixedCosts)}</span></div><div className="history-result"><small>UTILE / PERDITA</small><strong className={item.result.profit >= 0 ? 'text-green' : 'text-red'}>{money(item.result.profit)}</strong></div><div className="history-actions"><button className="button button-outline" onClick={() => loadScenario(item)}>Apri analisi <ArrowRight size={14} /></button><button className="icon-button danger-icon" title="Elimina" onClick={() => deleteScenario(item.id)}><Trash2 size={16} /></button></div></div>)}</div>}
-    <div className="history-note"><ShieldCheck size={16} /><span>Le analisi vengono salvate nel database locale quando il backend è attivo. In modalità locale, vengono conservate nel browser utilizzato.</span></div>
+    <PageHeading eyebrow="PRICING INTELLIGENCE · DECISIONE" title="Il prezzo non si indovina. Si progetta." description="Costruisci una soglia di marginalità per ogni prodotto e verifica il prezzo medio necessario al tuo obiettivo di utile." right={<span className="mini-tag"><Zap size={14} /> Calcolo istantaneo</span>} />
+    <section className="pricing-hero">
+      <div className="pricing-hero-copy"><span className="hero-kicker"><CircleDollarSign size={14}/> PRICE STUDIO</span><h2>Ogni euro deve avere un motivo.</h2><p>Imposta il margine di contribuzione che vuoi ottenere. BEP Manager calcola un prezzo-obiettivo per ciascuna voce, partendo dai suoi costi variabili.</p><button className="button button-dark" onClick={onProducts}>Rivedi costi e prodotti <ArrowRight size={16}/></button></div>
+      <div className="margin-control"><div className="margin-control-head"><span>Margine di contribuzione desiderato</span><strong>{targetMargin}%</strong></div><input type="range" min="5" max="85" step="1" value={targetMargin} onChange={(e) => setTargetMargin(Number(e.target.value))}/><div className="slider-limits"><span>5% · prudente</span><span>85% · ambizioso</span></div><div className="margin-formula">Prezzo target = costo variabile ÷ (1 − margine desiderato)</div></div>
+    </section>
+    <div className="pricing-kpis">
+      <div className="pricing-kpi"><span>Prezzo medio attuale</span><strong>{money(analysis.averagePrice, true)}</strong><small>ponderato sulle unità previste</small></div>
+      <div className="pricing-kpi highlight"><span>Prezzo medio per utile obiettivo</span><strong>{targetAveragePrice === null ? '—' : money(targetAveragePrice, true)}</strong><small>per raggiungere {money(request.targetProfit)} di utile</small></div>
+      <div className="pricing-kpi"><span>Utile obiettivo</span><strong>{money(request.targetProfit)}</strong><small>modificabile nei dati economici</small></div>
+    </div>
+    <section className="panel pricing-table-panel"><div className="panel-heading"><div><div className="eyebrow">RACCOMANDAZIONI MATEMATICHE</div><h2>Il prezzo-obiettivo, voce per voce</h2><p>Una soglia calcolata, non una previsione di domanda né un prezzo di mercato.</p></div><span className="mini-tag"><BadgeCheck size={13}/> Trasparente</span></div>
+      <div className="price-recommendations">{suggestions.map((item) => <article className="price-row" key={item.id}><div className="price-product"><span className="product-dot">{item.name.slice(0,1).toUpperCase()}</span><div><strong>{item.name}</strong><small>Costo variabile {money(item.variableCost, true)}</small></div></div><div className="price-current"><small>PREZZO ATTUALE</small><strong>{money(item.price, true)}</strong><em>{pct(item.currentMargin)}</em></div><div className="price-target"><small>PREZZO OBIETTIVO</small><strong>{money(item.suggested, true)}</strong><em className={item.delta <= 0 ? 'delta-good' : 'delta-warn'}>{item.delta > 0 ? '+' : ''}{money(item.delta, true)}</em></div><div className="price-bar"><i style={{width:`${Math.max(3, Math.min(100, item.currentMargin))}%`}}/><span>{pct(item.currentMargin)} margine oggi</span></div></article>)}</div>
+    </section>
+    <div className="pricing-disclaimer"><Lightbulb size={17}/><div><strong>Un prezzo sostenibile non è automaticamente un prezzo vendibile.</strong><p>Il calcolo considera costi e margine desiderato. Prima di applicare una variazione, verifica domanda, concorrenza, posizionamento, IVA e sensibilità dei clienti al prezzo.</p></div></div>
+  </>
+}
+
+function PlansPage({ selectedPlan, onSelect }: { selectedPlan: PlanId; onSelect: (plan: PlanId) => void }) {
+  const plans: { id: PlanId; name: string; price: string; period: string; subtitle: string; icon: typeof Rocket; features: string[]; featured?: boolean }[] = [
+    { id: 'starter', name: 'Starter', price: '€0', period: 'per sempre', subtitle: 'Per iniziare a leggere i numeri', icon: Compass, features: ['Dashboard e calcolo BEP', 'Fino a 3 prodotti dimostrativi', 'Analisi e formule trasparenti', 'Salvataggio locale nel browser'] },
+    { id: 'pro', name: 'Pro', price: '€19', period: '€/mese · prezzo demo', subtitle: 'Per prendere decisioni con metodo', icon: Rocket, featured: true, features: ['Prodotti e servizi multipli', 'Laboratorio what-if', 'Prezzi intelligenti e target', 'Storico scenari e report CSV/PDF', 'Insight automatici e KPI'] },
+    { id: 'studio', name: 'Studio', price: '€49', period: '€/mese · prezzo demo', subtitle: 'Per consulenti, team e presentazioni', icon: Gem, features: ['Tutto ciò che include Pro', 'Workspace e analisi multiple', 'Confronto di scenari', 'Report per presentazioni', 'Priorità sulle nuove funzioni (demo)'] },
+  ]
+  return <>
+    <PageHeading eyebrow="BEP MEMBERSHIP · PIANI" title="Scegli il modo di lavorare." description="Tre livelli pensati per esigenze diverse. In questa preview puoi provare tutto anche con Starter: i piani sono simulati e non prevedono pagamenti." right={<span className="demo-chip"><i/> DEMO · PAGAMENTI DISATTIVATI</span>} />
+    <section className="plan-intro"><div className="plan-intro-icon"><Crown size={22}/></div><div><strong>Premium non significa complicato.</strong><p>Ogni piano è progettato intorno a un diverso livello di controllo: capire, decidere, condividere.</p></div><span className="plan-demo-stamp">NO CARD<br/>NO IBAN<br/>NO ADDEBITI</span></section>
+    <div className="plans-grid">{plans.map((plan) => { const Icon = plan.icon; const active = selectedPlan === plan.id; return <article className={`plan-card ${plan.featured ? 'featured' : ''} ${active ? 'chosen' : ''}`} key={plan.id}>{plan.featured && <span className="plan-ribbon">PIÙ SCELTO</span>}<div className="plan-icon"><Icon size={20}/></div><div className="plan-name">{plan.name}</div><p className="plan-subtitle">{plan.subtitle}</p><div className="plan-price">{plan.price}<small>{plan.period}</small></div><ul>{plan.features.map((feature) => <li key={feature}><CheckCircle2 size={15}/>{feature}</li>)}</ul><button className={`button ${active ? 'button-dark' : plan.featured ? 'button-primary' : 'button-outline'} plan-cta`} onClick={() => onSelect(plan.id)}>{active ? 'Piano selezionato' : 'Attiva piano demo'} <ArrowRight size={15}/></button><div className="plan-status">{active ? <><BadgeCheck size={14}/> Attivo in questa demo</> : 'Nessun pagamento richiesto'}</div></article> })}</div>
+    <div className="pricing-disclaimer"><ShieldCheck size={17}/><div><strong>Questa non è una sottoscrizione commerciale.</strong><p>I prezzi e le funzionalità dei piani sono una simulazione per presentare il prodotto. La selezione viene memorizzata solo nel browser: non vengono raccolti dati di pagamento e nessun addebito viene effettuato.</p></div></div>
+  </>
+}
+
+function HistoryPage({ history, loadScenario, deleteScenario }: { history: SavedScenario[]; loadScenario: (item: SavedScenario) => void; deleteScenario: (id: number | string) => void }) {
+  const [firstId, setFirstId] = useState('')
+  const [secondId, setSecondId] = useState('')
+  const first = history.find((item) => String(item.id) === (firstId || String(history[0]?.id)))
+  const second = history.find((item) => String(item.id) === (secondId || String(history[1]?.id ?? history[0]?.id)))
+  return <>
+    <PageHeading eyebrow="TRACCIABILITÀ · CONFRONTO" title="Le decisioni, messe a confronto." description="Conserva le ipotesi, confronta i risultati e riprendi un'analisi precedente." right={<span className="mini-tag"><Database size={14} /> {history.length} analisi salvate</span>} />
+    {history.length >= 2 && <section className="panel compare-panel"><div className="panel-heading"><div><div className="eyebrow">SCENARIO COMPARATOR</div><h2>Due alternative. Una scelta più consapevole.</h2><p>Seleziona due analisi salvate per leggere le differenze principali.</p></div><span className="mini-tag"><ArrowUpRight size={13}/> Side by side</span></div><div className="compare-selects"><label>SCENARIO A<select className="text-input" value={first ? String(first.id) : ''} onChange={(e) => setFirstId(e.target.value)}>{history.map((item) => <option key={item.id} value={String(item.id)}>{item.name}</option>)}</select></label><label>SCENARIO B<select className="text-input" value={second ? String(second.id) : ''} onChange={(e) => setSecondId(e.target.value)}>{history.map((item) => <option key={item.id} value={String(item.id)}>{item.name}</option>)}</select></label></div>{first && second && <div className="compare-metrics"><div><span>UTILE / PERDITA</span><div><strong>{money(first.result.profit)}</strong><ArrowRight size={14}/><strong>{money(second.result.profit)}</strong></div><em className={second.result.profit >= first.result.profit ? 'delta-good' : 'delta-warn'}>{second.result.profit - first.result.profit >= 0 ? '+' : ''}{money(second.result.profit - first.result.profit)} differenza</em></div><div><span>PUNTO DI PAREGGIO</span><div><strong>{first.result.bepUnitsRounded === null ? '—' : integer.format(first.result.bepUnitsRounded)}</strong><ArrowRight size={14}/><strong>{second.result.bepUnitsRounded === null ? '—' : integer.format(second.result.bepUnitsRounded)}</strong></div><em>unità equivalenti</em></div><div><span>FATTURATO PREVISTO</span><div><strong>{money(first.result.totalRevenue)}</strong><ArrowRight size={14}/><strong>{money(second.result.totalRevenue)}</strong></div><em>ricavi stimati</em></div></div>}</section>}
+    {history.length === 0 ? <div className="panel empty-history"><div className="empty-icon"><History size={25} /></div><h2>Lo storico è ancora vuoto</h2><p>Salva due o più analisi per confrontare alternative e risultati.</p></div> : <div className="history-list">{history.map((item) => <div className="panel history-card" key={item.id}><div className="history-icon"><FileChartColumn size={19} /></div><div className="history-main"><strong>{item.name}</strong><span>{new Date(item.createdAt).toLocaleString('it-IT')} · {item.request.products.length} prodotti/servizi · costi fissi {money(item.request.fixedCosts)}</span></div><div className="history-result"><small>UTILE / PERDITA</small><strong className={item.result.profit >= 0 ? 'text-green' : 'text-red'}>{money(item.result.profit)}</strong></div><div className="history-actions"><button className="button button-outline" onClick={() => loadScenario(item)}>Apri analisi <ArrowRight size={14} /></button><button className="icon-button danger-icon" title="Elimina" onClick={() => deleteScenario(item.id)}><Trash2 size={16} /></button></div></div>)}</div>}
+    <div className="history-note"><ShieldCheck size={16} /><span>Le analisi vengono salvate sul backend quando è collegato; in demo locale restano nel browser utilizzato.</span></div>
   </>
 }
 
